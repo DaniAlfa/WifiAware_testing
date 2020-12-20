@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">WifiAwareCOM</string>
+    <string name="publisher_button">Publisher</string>
+    <string name="subscriber_button">Subscriber</string>
+    <string name="no_wifiAware_feature">Su dispositivo no cuenta con la capacidad de usar WifiAware</string>
+</resources>
