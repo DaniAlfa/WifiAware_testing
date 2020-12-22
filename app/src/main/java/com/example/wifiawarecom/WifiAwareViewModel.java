@@ -6,7 +6,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.net.ConnectivityManager;
 import android.net.wifi.aware.AttachCallback;
+import android.net.wifi.aware.DiscoverySessionCallback;
+import android.net.wifi.aware.PeerHandle;
+import android.net.wifi.aware.PublishConfig;
+import android.net.wifi.aware.PublishDiscoverySession;
 import android.net.wifi.aware.WifiAwareManager;
 import android.net.wifi.aware.WifiAwareSession;
 import android.os.Handler;
@@ -17,18 +22,26 @@ import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
+import java.io.IOException;
+
 public class WifiAwareViewModel extends AndroidViewModel {
 
+    private ConnectivityManager connectivityManager;
     private WifiAwareManager manager;
     private WifiAwareSession session;
+    private PublishDiscoverySession publishSession;
+    private Server publishServer;
     private MutableLiveData<Boolean> available;
     private HandlerThread worker;
     private Handler workerHandle;
+
+    private MutableLiveData<String> clientData;
 
     public WifiAwareViewModel(@NonNull Application app) {
         super(app);
         available = new MutableLiveData<Boolean>(Boolean.FALSE);
         session = null;
+        publishSession = null;
 
         if(!app.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_AWARE)){
             manager = null;
@@ -39,6 +52,7 @@ public class WifiAwareViewModel extends AndroidViewModel {
         worker.start();
         workerHandle = new Handler(worker.getLooper());
 
+        connectivityManager = (ConnectivityManager) app.getSystemService(app.CONNECTIVITY_SERVICE);
         manager = (WifiAwareManager)app.getSystemService(app.WIFI_AWARE_SERVICE);
         IntentFilter filter = new IntentFilter(WifiAwareManager.ACTION_WIFI_AWARE_STATE_CHANGED);
         BroadcastReceiver myReceiver = new BroadcastReceiver() {
@@ -51,16 +65,23 @@ public class WifiAwareViewModel extends AndroidViewModel {
         checkWifiAwareAvailability();
     }
 
+    @Override
+    protected void onCleared() {
+        closeSessions();
+    }
+
     public boolean isWifiAwareSupported(){
         return manager != null;
     }
 
     private void checkWifiAwareAvailability(){
-        synchronized (this) {
-            if (session != null) {
-                session.close();
-                session = null;
+        if (session != null) {
+            if(publishSession != null){
+                publishSession.close();
+                publishSession = null;
             }
+            session.close();
+            session = null;
         }
         if(manager.isAvailable()){
             available.setValue(Boolean.TRUE);
@@ -74,28 +95,89 @@ public class WifiAwareViewModel extends AndroidViewModel {
         return available;
     }
 
-    public synchronized boolean createSession() throws InterruptedException {
+    public  LiveData<String> getClientData(){return clientData;}
+
+    public void setClientData(String clientData) {
+        this.clientData.setValue(clientData);
+    }
+
+    public boolean createSession() throws InterruptedException {
         if(manager == null) return false;
-
-        manager.attach(new AttachCallback(){
-            @Override
-            public void onAttached(WifiAwareSession session) {
-                synchronized (WifiAwareViewModel.this){
-                    WifiAwareViewModel.this.session = session;
-                    WifiAwareViewModel.this.notify();
+        if(session != null) return true;
+        synchronized (this){
+            manager.attach(new AttachCallback(){
+                @Override
+                public void onAttached(WifiAwareSession session) {
+                    synchronized (WifiAwareViewModel.this){
+                        WifiAwareViewModel.this.session = session;
+                        WifiAwareViewModel.this.notify();
+                    }
                 }
-            }
 
-            @Override
-            public void onAttachFailed() {
-                synchronized (WifiAwareViewModel.this){
-                    WifiAwareViewModel.this.session = null;
-                    WifiAwareViewModel.this.notify();
+                @Override
+                public void onAttachFailed() {
+                    synchronized (WifiAwareViewModel.this){
+                        session = null;
+                        WifiAwareViewModel.this.notify();
+                    }
                 }
-            }
-        }, workerHandle);
-        this.wait();
-        return session != null;
+            }, workerHandle);
+            this.wait();
+            return session != null;
+        }
+    }
+
+    public boolean publishService(String serviceName) throws InterruptedException {
+        if(session == null) return false;
+        synchronized (WifiAwareViewModel.this){
+            PublishConfig config = new PublishConfig.Builder().setServiceName(serviceName).build();
+            session.publish(config, new DiscoverySessionCallback(){
+                @Override
+                public void onPublishStarted(@NonNull PublishDiscoverySession session) {
+                    synchronized (WifiAwareViewModel.this){
+                        publishSession = session;
+                        try {
+                            publishServer = new Server(connectivityManager, WifiAwareViewModel.this);
+                            publishServer.start();
+                        } catch (IOException e) {
+                            session.close();
+                            publishSession = null;
+                        }
+                        WifiAwareViewModel.this.notify();
+                    }
+                }
+
+                @Override
+                public void onSessionConfigFailed() {
+                    synchronized (WifiAwareViewModel.this){
+                        publishSession = null;
+                        WifiAwareViewModel.this.notify();
+                    }
+                }
+
+                @Override
+                public void onMessageReceived(PeerHandle peerHandle, byte[] message) {
+                    publishServer.addNewConnection(publishSession, peerHandle);
+                }
+
+            }, workerHandle);
+
+            this.wait();
+            return publishSession != null;
+        }
+    }
+
+    public void closeSessions(){
+        if(publishSession != null){
+            publishSession.close();
+            publishServer.stop();
+            publishServer = null;
+            publishSession = null;
+        }
+        if(session != null){
+            session.close();
+            session = null;
+        }
     }
 
 }

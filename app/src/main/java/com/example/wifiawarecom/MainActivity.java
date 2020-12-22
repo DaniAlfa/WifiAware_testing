@@ -15,11 +15,13 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity {
 
     private Button mPublisherButton, mSubscriberButton;
+    private TextView mClientData;
     private WifiAwareViewModel mAwareModel;
 
     @Override
@@ -48,6 +50,13 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+
+        mAwareModel.getClientData().observe(this, new Observer<String>() {
+            @Override
+            public void onChanged(String s) {
+                mClientData.setText(s);
+            }
+        });
     }
 
     private void initView(){
@@ -65,6 +74,8 @@ public class MainActivity extends AppCompatActivity {
                 subscribeToService();
             }
         });
+
+        mClientData = (TextView) findViewById(R.id.clientData);
     }
 
     private void setControlsEnabled(boolean b){
@@ -75,7 +86,15 @@ public class MainActivity extends AppCompatActivity {
     private void publishService(){
         setControlsEnabled(false);
         try {
-            if(!mAwareModel.createSession()){
+            if(mAwareModel.createSession()){
+                if(mAwareModel.publishService("Server")){
+                    Toast.makeText(this, "Se publico un nuevo servicio con WifiAware", Toast.LENGTH_SHORT).show();
+                }
+                else{
+                    Toast.makeText(this, "No se pudo publicar un servicio de WifiAware", Toast.LENGTH_SHORT).show();
+                    setControlsEnabled(true);
+                }
+            }else {
                 Toast.makeText(this, "No se pudo crear la sesion de WifiAware", Toast.LENGTH_SHORT).show();
                 setControlsEnabled(true);
             }
