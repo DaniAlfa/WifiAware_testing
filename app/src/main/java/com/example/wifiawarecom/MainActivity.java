@@ -30,7 +30,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         initView();
 
-        mAwareModel = new ViewModelProvider(this).get(WifiAwareViewModel.class);
+        mAwareModel = new ViewModelProvider(this, new ViewModelProvider.AndroidViewModelFactory(getApplication())).get(WifiAwareViewModel.class);
 
         if(!mAwareModel.isWifiAwareSupported()){
             setControlsEnabled(false);

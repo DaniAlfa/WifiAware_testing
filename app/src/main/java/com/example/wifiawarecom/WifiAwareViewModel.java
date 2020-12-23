@@ -12,6 +12,8 @@ import android.net.wifi.aware.DiscoverySessionCallback;
 import android.net.wifi.aware.PeerHandle;
 import android.net.wifi.aware.PublishConfig;
 import android.net.wifi.aware.PublishDiscoverySession;
+import android.net.wifi.aware.SubscribeConfig;
+import android.net.wifi.aware.SubscribeDiscoverySession;
 import android.net.wifi.aware.WifiAwareManager;
 import android.net.wifi.aware.WifiAwareSession;
 import android.os.Handler;
@@ -23,6 +25,7 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
 import java.io.IOException;
+import java.util.List;
 
 public class WifiAwareViewModel extends AndroidViewModel {
 
@@ -30,7 +33,9 @@ public class WifiAwareViewModel extends AndroidViewModel {
     private WifiAwareManager manager;
     private WifiAwareSession session;
     private PublishDiscoverySession publishSession;
+    private SubscribeDiscoverySession subscribeSession;
     private Server publishServer;
+    private Client subscriberClient;
     private MutableLiveData<Boolean> available;
     private HandlerThread worker;
     private Handler workerHandle;
@@ -40,8 +45,12 @@ public class WifiAwareViewModel extends AndroidViewModel {
     public WifiAwareViewModel(@NonNull Application app) {
         super(app);
         available = new MutableLiveData<Boolean>(Boolean.FALSE);
+        clientData = new MutableLiveData<String>("");
         session = null;
         publishSession = null;
+        subscribeSession = null;
+        subscriberClient = null;
+        publishServer = null;
 
         if(!app.getPackageManager().hasSystemFeature(PackageManager.FEATURE_WIFI_AWARE)){
             manager = null;
@@ -131,6 +140,7 @@ public class WifiAwareViewModel extends AndroidViewModel {
         if(session == null) return false;
         synchronized (WifiAwareViewModel.this){
             PublishConfig config = new PublishConfig.Builder().setServiceName(serviceName).build();
+
             session.publish(config, new DiscoverySessionCallback(){
                 @Override
                 public void onPublishStarted(@NonNull PublishDiscoverySession session) {
@@ -167,12 +177,60 @@ public class WifiAwareViewModel extends AndroidViewModel {
         }
     }
 
+    public boolean subscribeToService(String serviceName) throws InterruptedException {
+        if(session == null) return false;
+        synchronized (WifiAwareViewModel.this){
+            SubscribeConfig config = new SubscribeConfig.Builder().setServiceName(serviceName).build();
+            session.subscribe(config, new DiscoverySessionCallback(){
+
+                private PeerHandle lastPeerHandle;
+                @Override
+                public void onSubscribeStarted(@NonNull SubscribeDiscoverySession session) {
+                    synchronized (WifiAwareViewModel.this){
+                        subscribeSession = session;
+                        WifiAwareViewModel.this.notify();
+                    }
+                }
+
+                @Override
+                public void onSessionConfigFailed() {
+                    synchronized (WifiAwareViewModel.this){
+                        subscribeSession = null;
+                        WifiAwareViewModel.this.notify();
+                    }
+                }
+
+                @Override
+                public void onServiceDiscovered(PeerHandle peerHandle, byte[] serviceSpecificInfo, List<byte[]> matchFilter) {
+                    lastPeerHandle = peerHandle;
+                    subscribeSession.sendMessage(peerHandle, 0, (new String("connect")).getBytes());
+                }
+
+                @Override
+                public void onMessageSendSucceeded(int messageId) {
+                    subscriberClient = new Client(connectivityManager, subscribeSession, lastPeerHandle);
+                }
+
+
+            }, workerHandle);
+
+            this.wait();
+            return subscribeSession != null;
+        }
+    }
+
     public void closeSessions(){
         if(publishSession != null){
             publishSession.close();
             publishServer.stop();
             publishServer = null;
             publishSession = null;
+        }
+        if(subscribeSession != null){
+            subscribeSession.close();
+            subscriberClient.stop();
+            subscriberClient = null;
+            subscribeSession = null;
         }
         if(session != null){
             session.close();
