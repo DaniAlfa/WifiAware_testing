@@ -103,7 +103,20 @@ public class MainActivity extends AppCompatActivity {
 
    private void subscribeToService(){
        setControlsEnabled(false);
-
+       try {
+           if(mAwareModel.createSession()){
+               if(mAwareModel.subscribeToService("Server")){
+                   Toast.makeText(this, "Se creo una sesion de subscripcion con WifiAware", Toast.LENGTH_SHORT).show();
+               }
+               else{
+                   Toast.makeText(this, "No se pudo crear una sesion de subscripcion de WifiAware", Toast.LENGTH_SHORT).show();
+                   setControlsEnabled(true);
+               }
+           }else {
+               Toast.makeText(this, "No se pudo crear la sesion de WifiAware", Toast.LENGTH_SHORT).show();
+               setControlsEnabled(true);
+           }
+       } catch (InterruptedException e) {}
    }
 
 }

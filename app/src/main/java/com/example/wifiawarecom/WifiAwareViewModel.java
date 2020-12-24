@@ -93,10 +93,10 @@ public class WifiAwareViewModel extends AndroidViewModel {
             session = null;
         }
         if(manager.isAvailable()){
-            available.setValue(Boolean.TRUE);
+            available.postValue(Boolean.TRUE);
         }
         else{
-            available.setValue(Boolean.FALSE);
+            available.postValue(Boolean.FALSE);
         }
     }
 
@@ -107,7 +107,7 @@ public class WifiAwareViewModel extends AndroidViewModel {
     public  LiveData<String> getClientData(){return clientData;}
 
     public void setClientData(String clientData) {
-        this.clientData.setValue(clientData);
+        this.clientData.postValue(clientData);
     }
 
     public boolean createSession() throws InterruptedException {

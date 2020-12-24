@@ -19,6 +19,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 
 
 public class Client implements Runnable{
@@ -41,7 +42,7 @@ public class Client implements Runnable{
         mMainSocketChannel = null;
         mConnManager = manager;
         NetworkSpecifier networkSpecifier = new WifiAwareNetworkSpecifier.Builder(subscribeSession, handle)
-                .setPskPassphrase("1234")
+                .setPskPassphrase("wifiawaretest")
                 .build();
         NetworkRequest networkRequest = new NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI_AWARE)
@@ -77,13 +78,14 @@ public class Client implements Runnable{
             int i = 0;
             while(mEnabled){
                 mWriteBuffer.clear();
-                mWriteBuffer = ByteBuffer.wrap(String.valueOf(i).getBytes());
+                mWriteBuffer = ByteBuffer.wrap(String.valueOf(i).getBytes(StandardCharsets.UTF_8));
                 mMainSocketChannel.write(mWriteBuffer);
                 ++i;
                 i %= 11;
+                Thread.sleep(1000);
             }
             mMainSocketChannel.close();
-        } catch (IOException ex){
+        } catch (IOException | InterruptedException ex){
             Log.d(TAG, "Client run: " + ex.toString());
         }
         finally {
@@ -103,11 +105,16 @@ public class Client implements Runnable{
             mCurrentNet = network;
         }
 
+        //Debugeando he visto que se llama dos veces a este callback al conectarse
+        //En una primera conexion cliente-servidor, con el objeto NetworkCapabilities de la primera llamada es suficiente, la segunda se puede ignorar
+        //En cambio si cierras el servidor y lo vuelves a abrir, el cliente intentara conectarse arrancando el thread en la primera llamada y fallara.
+        //En la segunda cogiendo el segundo objeto NetworkCapabilities si funciona
+        //Es un poco raro hay que revisarlo (lo mismo no se cierra el canal bien o algo asi no se)
         @Override
         public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
-            if(mCurrentNet.equals(network) && mCurrentNetCapabitities == null){
+            if(mCurrentNetCapabitities == null){
                 mCurrentNetCapabitities = networkCapabilities;
-                start();
+                if(!mEnabled) start();
             }
             else Log.d(TAG, "onCapabilitiesChanged: Red distinta o nueva capability");
         }

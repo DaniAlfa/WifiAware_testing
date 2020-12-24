@@ -8,6 +8,7 @@ import android.net.NetworkSpecifier;
 import android.net.wifi.aware.DiscoverySession;
 import android.net.wifi.aware.PeerHandle;
 import android.net.wifi.aware.WifiAwareNetworkSpecifier;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 
@@ -20,6 +21,9 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -28,6 +32,8 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Server implements Runnable{
+    private static final String TAG = "Server";
+
     private static final int BUFFER_SIZE = 8192;
 
     private final WifiAwareViewModel mModel;
@@ -112,7 +118,7 @@ public class Server implements Runnable{
             serverSocketChannel.socket().bind(new InetSocketAddress(0));
             mServerPort = serverSocketChannel.socket().getLocalPort();
             NetworkSpecifier networkSpecifier = new WifiAwareNetworkSpecifier.Builder(discoverySession, handle)
-                    .setPskPassphrase("1234")
+                    .setPskPassphrase("wifiawaretest")
                     .setPort(mServerPort)
                     .build();
             NetworkRequest networkRequest = new NetworkRequest.Builder()
@@ -212,10 +218,26 @@ public class Server implements Runnable{
         mReadBuffer.clear();
         try {
             numRead = ((ByteChannel) socketChannel).read(mReadBuffer);
-            if(numRead != -1) mModel.setClientData(mReadBuffer.toString());
+            if(numRead != -1){
+                byte[] bytes = mReadBuffer.array();
+                String v = new String(bytes, 0, numRead, StandardCharsets.UTF_8);
+                Log.d(TAG, "read: " + v);
+                mModel.setClientData(v);
+            }
         } catch (IOException e) {
             socketChannel.keyFor(mSelector).cancel();
         }
+    }
+
+    public static String bb_to_str(ByteBuffer buffer, Charset charset){
+        byte[] bytes;
+        if(buffer.hasArray()) {
+            bytes = buffer.array();
+        } else {
+            bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+        }
+        return new String(bytes, charset);
     }
 
     private class Connection{
@@ -223,6 +245,7 @@ public class Server implements Runnable{
         public Connection(ServerSocketChannel serverChan, PeerHandle handle){
             mServerSocketChannel = serverChan;
             this.handle = handle;
+            mComChannels = new ArrayList<>();
         }
         public ServerSocketChannel mServerSocketChannel;
         public PeerHandle handle;
