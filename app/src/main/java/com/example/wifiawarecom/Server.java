@@ -46,6 +46,9 @@ public class Server implements Runnable{
     private ConnectivityManager mConManager;
     private final Lock mSelectorLock = new ReentrantLock();
 
+    private ByteChannel mCanalTextView1 = null; //El primer canal escribe en 1 textview y el segundo en el otro
+    private ByteChannel mCanalTextView2 = null;
+
     public Server(ConnectivityManager manager, WifiAwareViewModel model) throws IOException {
         mModel = model;
         mSelector = Selector.open();
@@ -151,17 +154,10 @@ public class Server implements Runnable{
         if(conn == null){
             return;
         }
+        serverChan = conn.mServerSocketChannel;
         mSelectorLock.lock();
         mSelector.wakeup();
-        try {
-            serverChan = conn.mServerSocketChannel;
-            serverChan.keyFor(mSelector).cancel();
-            serverChan.close();
-            for(SocketChannel chan : conn.mComChannels){
-                chan.keyFor(mSelector).cancel();
-                chan.close();
-            }
-        } catch (IOException e) {}
+        conn.closeConnection(mSelector);
         mSelectorLock.unlock();
         mConnectionsMap.remove(handle);
         mServerChannelsMap.remove(serverChan);
@@ -170,15 +166,7 @@ public class Server implements Runnable{
     private synchronized void closeAllConnections(){
         mSelectorLock.lock();
         for(Connection conn : mConnectionsMap.values()){
-            try {
-                ServerSocketChannel serverChan = conn.mServerSocketChannel;
-                serverChan.keyFor(mSelector).cancel();
-                serverChan.close();
-                for(SocketChannel chan : conn.mComChannels){
-                    chan.keyFor(mSelector).cancel();
-                    chan.close();
-                }
-            } catch (IOException e) {}
+            conn.closeConnection(mSelector);
         }
         mConnectionsMap.clear();
         mServerChannelsMap.clear();
@@ -198,17 +186,9 @@ public class Server implements Runnable{
             socketChannel.register(mSelector, SelectionKey.OP_READ);
             conn.mComChannels.add(socketChannel);
         } catch (IOException e) {
-            try {
-                serverChan.keyFor(mSelector).cancel();
-                serverChan.close();
-                for(SocketChannel chan : conn.mComChannels){
-                    chan.keyFor(mSelector).cancel();
-                    chan.close();
-                }
-            }
-            catch (IOException ex){}
             mConnectionsMap.remove(conn.handle);
             mServerChannelsMap.remove(serverChan);
+            conn.closeConnection(mSelector);
         }
     }
 
@@ -217,12 +197,22 @@ public class Server implements Runnable{
         SelectableChannel socketChannel = key.channel();
         mReadBuffer.clear();
         try {
-            numRead = ((ByteChannel) socketChannel).read(mReadBuffer);
+            ByteChannel bChan = (ByteChannel) socketChannel;
+            if(mCanalTextView1 == null){
+                mCanalTextView1 = bChan;
+            }else if(mCanalTextView2 == null) mCanalTextView2 = bChan;
+            numRead = bChan.read(mReadBuffer);
             if(numRead != -1){
                 byte[] bytes = mReadBuffer.array();
                 String v = new String(bytes, 0, numRead, StandardCharsets.UTF_8);
                 Log.d(TAG, "read: " + v);
-                mModel.setClientData(v);
+                if(bChan.equals(mCanalTextView1)){
+                    mModel.setClientData1(v);
+                }
+                else if(bChan.equals(mCanalTextView2)){
+                    mModel.setClientData2(v);
+                }
+
             }
         } catch (IOException e) {
             socketChannel.keyFor(mSelector).cancel();
@@ -251,6 +241,26 @@ public class Server implements Runnable{
         public PeerHandle handle;
         public Network net;
         public List<SocketChannel> mComChannels;
+
+        public void closeConnection(Selector selector){
+            try {
+                SelectionKey selKey = this.mServerSocketChannel.keyFor(selector);
+                if(selKey != null) selKey.cancel();
+                this.mServerSocketChannel.close();
+                for(SocketChannel chan : this.mComChannels){
+                    selKey = chan.keyFor(selector);
+                    if(selKey != null) selKey.cancel();
+                    chan.close();
+                }
+            } catch (IOException e) {}
+            finally {
+                this.mServerSocketChannel = null;
+                this.handle = null;
+                this.net = null;
+                this.mComChannels.clear();
+
+            }
+        }
     }
 
     private class WifiAwareNetworkCallback extends ConnectivityManager.NetworkCallback{

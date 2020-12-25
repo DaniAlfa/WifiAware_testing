@@ -21,7 +21,7 @@ import android.widget.Toast;
 public class MainActivity extends AppCompatActivity {
 
     private Button mPublisherButton, mSubscriberButton;
-    private TextView mClientData;
+    private TextView mClientData1, mClientData2;
     private WifiAwareViewModel mAwareModel;
 
     @Override
@@ -42,8 +42,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onChanged(Boolean available) {
                 if (available) {
-                    setControlsEnabled(true);
-                    Toast.makeText(MainActivity.this, "WifiAware esta disponible", Toast.LENGTH_SHORT).show();
+                    if(mAwareModel.publishSessionCreated() || mAwareModel.subscribeSessionCreated()){
+                        setControlsEnabled(false);
+                    }
+                    else{
+                        setControlsEnabled(true);
+                        Toast.makeText(MainActivity.this, "WifiAware esta disponible", Toast.LENGTH_SHORT).show();
+                    }
+
                 } else {
                     setControlsEnabled(false);
                     Toast.makeText(MainActivity.this, "WifiAware no esta disponible, active Wifi o desactive WifiDirect", Toast.LENGTH_SHORT).show();
@@ -51,10 +57,17 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        mAwareModel.getClientData().observe(this, new Observer<String>() {
+        mAwareModel.getClientData1().observe(this, new Observer<String>() {
             @Override
             public void onChanged(String s) {
-                mClientData.setText(s);
+                mClientData1.setText(s);
+            }
+        });
+
+        mAwareModel.getClientData2().observe(this, new Observer<String>() {
+            @Override
+            public void onChanged(String s) {
+                mClientData2.setText(s);
             }
         });
     }
@@ -75,7 +88,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        mClientData = (TextView) findViewById(R.id.clientData);
+        mClientData1 = (TextView) findViewById(R.id.clientData1);
+        mClientData2 = (TextView) findViewById(R.id.clientData2);
     }
 
     private void setControlsEnabled(boolean b){

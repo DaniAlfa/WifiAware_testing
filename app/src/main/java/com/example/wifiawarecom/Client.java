@@ -30,7 +30,8 @@ public class Client implements Runnable{
     private final ConnectivityManager mConnManager;
     private Network mCurrentNet;
     private NetworkCapabilities mCurrentNetCapabitities;
-    private SocketChannel mMainSocketChannel;
+    private SocketChannel mSocketChannel_2;
+    private SocketChannel mSocketChannel_1;
     private ByteBuffer mWriteBuffer = ByteBuffer.allocate(BUFFER_SIZE);
 
     private Thread mClientThread;
@@ -39,7 +40,8 @@ public class Client implements Runnable{
     public Client(ConnectivityManager manager, DiscoverySession subscribeSession, PeerHandle handle){
         mCurrentNetCapabitities = null;
         mCurrentNet = null;
-        mMainSocketChannel = null;
+        mSocketChannel_1 = null;
+        mSocketChannel_2 = null;
         mConnManager = manager;
         NetworkSpecifier networkSpecifier = new WifiAwareNetworkSpecifier.Builder(subscribeSession, handle)
                 .setPskPassphrase("wifiawaretest")
@@ -73,25 +75,41 @@ public class Client implements Runnable{
             WifiAwareNetworkInfo peerAwareInfo = (WifiAwareNetworkInfo) mCurrentNetCapabitities.getTransportInfo();
             InetAddress peerIpv6 = peerAwareInfo.getPeerIpv6Addr();
             int peerPort = peerAwareInfo.getPort();
-            mMainSocketChannel = SocketChannel.open();
-            mMainSocketChannel.connect(new InetSocketAddress(peerIpv6, peerPort));
+            mSocketChannel_1 = SocketChannel.open();
+            mSocketChannel_1.connect(new InetSocketAddress(peerIpv6, peerPort));
+            mSocketChannel_2 = SocketChannel.open();
+            mSocketChannel_2.connect(new InetSocketAddress(peerIpv6, peerPort));
             int i = 0;
+            int j = 100;
             while(mEnabled){
                 mWriteBuffer.clear();
                 mWriteBuffer = ByteBuffer.wrap(String.valueOf(i).getBytes(StandardCharsets.UTF_8));
-                mMainSocketChannel.write(mWriteBuffer);
+                mSocketChannel_1.write(mWriteBuffer);
                 ++i;
                 i %= 11;
+                mWriteBuffer.clear();
+                mWriteBuffer = ByteBuffer.wrap(String.valueOf(j).getBytes(StandardCharsets.UTF_8));
+                mSocketChannel_2.write(mWriteBuffer);
+                --j;
+                if(j < 0) j = 100;
                 Thread.sleep(1000);
             }
-            mMainSocketChannel.close();
-        } catch (IOException | InterruptedException ex){
-            Log.d(TAG, "Client run: " + ex.toString());
+            mSocketChannel_1.close();
+            mSocketChannel_2.close();
+        } catch (IOException ex1){
+            Log.d(TAG, "Client run: " + ex1.toString());
+        }
+        catch (InterruptedException ex2){
+            try {
+                mSocketChannel_1.close();
+                mSocketChannel_2.close();
+            } catch (IOException e) {}
         }
         finally {
             mEnabled = false;
             mClientThread = null;
-            mMainSocketChannel = null;
+            mSocketChannel_1 = null;
+            mSocketChannel_2 = null;
             mCurrentNetCapabitities = null;
             mCurrentNet = null;
         }
@@ -109,9 +127,15 @@ public class Client implements Runnable{
         //En una primera conexion cliente-servidor, con el objeto NetworkCapabilities de la primera llamada es suficiente, la segunda se puede ignorar
         //En cambio si cierras el servidor y lo vuelves a abrir, el cliente intentara conectarse arrancando el thread en la primera llamada y fallara.
         //En la segunda cogiendo el segundo objeto NetworkCapabilities si funciona
-        //Es un poco raro hay que revisarlo (lo mismo no se cierra el canal bien o algo asi no se)
+        //Es un poco raro hay que revisarlo
+
+        //He visto que lo que cambia entre las llamadas es la direccion IPv6
+        //Cuando tiene como prefijo %aware_data0 funciona, si no al intentar conectar salta excepcion de argumento invalido
         @Override
         public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
+            WifiAwareNetworkInfo peerAwareInfo = (WifiAwareNetworkInfo) networkCapabilities.getTransportInfo();
+            InetAddress peerIpv6 = peerAwareInfo.getPeerIpv6Addr();
+            int peerPort = peerAwareInfo.getPort();
             if(mCurrentNetCapabitities == null){
                 mCurrentNetCapabitities = networkCapabilities;
                 if(!mEnabled) start();

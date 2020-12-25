@@ -9,7 +9,14 @@
     tools:context=".MainActivity">
 
     <TextView
-        android:id="@+id/clientData"
+        android:id="@+id/clientData1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textAlignment="center"
+        android:textSize="40dp"
+        android:text="TextView" />
+    <TextView
+        android:id="@+id/clientData2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textAlignment="center"

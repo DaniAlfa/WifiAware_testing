@@ -40,12 +40,14 @@ public class WifiAwareViewModel extends AndroidViewModel {
     private HandlerThread worker;
     private Handler workerHandle;
 
-    private MutableLiveData<String> clientData;
+    private MutableLiveData<String> clientData1;
+    private MutableLiveData<String> clientData2;
 
     public WifiAwareViewModel(@NonNull Application app) {
         super(app);
         available = new MutableLiveData<Boolean>(Boolean.FALSE);
-        clientData = new MutableLiveData<String>("");
+        clientData1 = new MutableLiveData<String>("");
+        clientData2 = new MutableLiveData<String>("");
         session = null;
         publishSession = null;
         subscribeSession = null;
@@ -84,14 +86,7 @@ public class WifiAwareViewModel extends AndroidViewModel {
     }
 
     private void checkWifiAwareAvailability(){
-        if (session != null) {
-            if(publishSession != null){
-                publishSession.close();
-                publishSession = null;
-            }
-            session.close();
-            session = null;
-        }
+        closeSessions();
         if(manager.isAvailable()){
             available.postValue(Boolean.TRUE);
         }
@@ -104,10 +99,24 @@ public class WifiAwareViewModel extends AndroidViewModel {
         return available;
     }
 
-    public  LiveData<String> getClientData(){return clientData;}
+    public  LiveData<String> getClientData1(){return clientData1;}
 
-    public void setClientData(String clientData) {
-        this.clientData.postValue(clientData);
+    public void setClientData1(String clientData) {
+        this.clientData1.postValue(clientData);
+    }
+
+    public  LiveData<String> getClientData2(){return clientData2;}
+
+    public void setClientData2(String clientData) {
+        this.clientData2.postValue(clientData);
+    }
+
+    public boolean publishSessionCreated(){
+        return publishSession != null;
+    }
+
+    public boolean subscribeSessionCreated(){
+        return subscribeSession != null;
     }
 
     public boolean createSession() throws InterruptedException {
