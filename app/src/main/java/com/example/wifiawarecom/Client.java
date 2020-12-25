@@ -133,9 +133,6 @@ public class Client implements Runnable{
         //Cuando tiene como prefijo %aware_data0 funciona, si no al intentar conectar salta excepcion de argumento invalido
         @Override
         public void onCapabilitiesChanged(@NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
-            WifiAwareNetworkInfo peerAwareInfo = (WifiAwareNetworkInfo) networkCapabilities.getTransportInfo();
-            InetAddress peerIpv6 = peerAwareInfo.getPeerIpv6Addr();
-            int peerPort = peerAwareInfo.getPort();
             if(mCurrentNetCapabitities == null){
                 mCurrentNetCapabitities = networkCapabilities;
                 if(!mEnabled) start();
